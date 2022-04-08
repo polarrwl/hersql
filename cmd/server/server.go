@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Orlion/lakeman/internal/server"
+	"github.com/dolthub/go-mysql-server/auth"
 	dserver "github.com/dolthub/go-mysql-server/server"
 )
 
@@ -18,6 +19,7 @@ func main() {
 		MaxConnections:         5,
 		TLSConfig:              nil,
 		RequireSecureTransport: false,
+		Auth:                   auth.NewNativeSingle("root", "123456", auth.AllPermissions),
 	})
 	if err != nil {
 		log.Fatalln(err)

@@ -19,7 +19,7 @@ func NewServer(cfg server.Config) (*Server, error) {
 		cfg.ConnWriteTimeout = 0
 	}
 
-	if cfg.MaxConnections < 0 {
+	if cfg.MaxConnections < 1 {
 		cfg.MaxConnections = 0
 	}
 
@@ -54,13 +54,11 @@ func NewServer(cfg server.Config) (*Server, error) {
 	return &Server{Listener: vtListnr, h: handler}, nil
 }
 
-// Start starts accepting connections on the server.
 func (s *Server) Start() error {
 	s.Listener.Accept()
 	return nil
 }
 
-// Close closes the server connection.
 func (s *Server) Close() error {
 	s.Listener.Close()
 	return nil
