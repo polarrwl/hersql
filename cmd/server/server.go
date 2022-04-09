@@ -1,9 +1,11 @@
 package main
 
 import (
-	"log"
+	"fmt"
+	"os"
 	"time"
 
+	"github.com/Orlion/lakeman/internal/log"
 	"github.com/Orlion/lakeman/internal/server"
 	"github.com/dolthub/go-mysql-server/auth"
 	dserver "github.com/dolthub/go-mysql-server/server"
@@ -20,9 +22,10 @@ func main() {
 		TLSConfig:              nil,
 		RequireSecureTransport: false,
 		Auth:                   auth.NewNativeSingle("root", "123456", auth.AllPermissions),
-	})
+	}, log.GetLogger())
 	if err != nil {
-		log.Fatalln(err)
+		fmt.Println(err)
+		os.Exit(-1)
 	}
 	server.Start()
 }

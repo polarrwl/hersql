@@ -3,14 +3,16 @@ package server
 import (
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/vitess/go/mysql"
+	"go.uber.org/zap"
 )
 
 type Server struct {
 	Listener *mysql.Listener
 	h        *Handler
+	logger   *zap.SugaredLogger
 }
 
-func NewServer(cfg server.Config) (*Server, error) {
+func NewServer(cfg server.Config, logger *zap.SugaredLogger) (*Server, error) {
 	if cfg.ConnReadTimeout < 0 {
 		cfg.ConnReadTimeout = 0
 	}
@@ -23,7 +25,7 @@ func NewServer(cfg server.Config) (*Server, error) {
 		cfg.MaxConnections = 0
 	}
 
-	handler := newHandler(cfg.ConnReadTimeout)
+	handler := newHandler(cfg.ConnReadTimeout, logger)
 
 	a := cfg.Auth.Mysql()
 	l, err := NewListener(cfg.Protocol, cfg.Address, handler)
@@ -51,10 +53,11 @@ func NewServer(cfg server.Config) (*Server, error) {
 	vtListnr.TLSConfig = cfg.TLSConfig
 	vtListnr.RequireSecureTransport = cfg.RequireSecureTransport
 
-	return &Server{Listener: vtListnr, h: handler}, nil
+	return &Server{Listener: vtListnr, h: handler, logger: logger}, nil
 }
 
 func (s *Server) Start() error {
+	s.logger.Infow("server 启动...")
 	s.Listener.Accept()
 	return nil
 }
