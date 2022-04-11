@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Orlion/lakeman/pkg/bytesx"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -107,71 +106,37 @@ func (h *Handler) parseNavicatResp(resp *http.Response) (result *sqltypes.Result
 		return
 	}
 
-	errnoBys := make([]byte, 4)
-	n, err = resp.Body.Read(errnoBys)
-	if err != nil {
-		return
-	}
-	if n != 4 {
-		return
-	}
-
-	errno := bytesx.Bytes2Int32(errnoBys)
-	if errno != 0 {
-		return
-	}
+	errno, err := readInt32(resp.Body)
 
 	tmp := make([]byte, 6)
 	resp.Body.Read(tmp)
 
 	// read result header
-	errnoBys = make([]byte, 4)
-	n, err = resp.Body.Read(errnoBys)
-	if err != nil {
-		return
-	}
-	if n != 4 {
-		return
-	}
+	errno, err = readInt32(resp.Body)
 
-	affectrowsBys := make([]byte, 4)
-	n, err = resp.Body.Read(affectrowsBys)
-	if err != nil {
-		return
-	}
-	if n != 4 {
-		return
-	}
+	affectrows, err := readInt32(resp.Body)
 
-	insertidBys := make([]byte, 4)
-	n, err = resp.Body.Read(insertidBys)
-	if err != nil {
-		return
-	}
-	if n != 4 {
-		return
-	}
+	insertid, err := readInt32(resp.Body)
 
-	numfieldsBys := make([]byte, 4)
-	n, err = resp.Body.Read(numfieldsBys)
-	if err != nil {
-		return
-	}
-	if n != 4 {
-		return
-	}
+	numfields, err := readInt32(resp.Body)
 
-	numrowsBys := make([]byte, 4)
-	n, err = resp.Body.Read(numrowsBys)
-	if err != nil {
-		return
-	}
-	if n != 4 {
-		return
-	}
+	numrows, err := readInt32(resp.Body)
 
 	tmp = make([]byte, 6)
 	resp.Body.Read(tmp)
+
+	if numfields > 0 {
+		// read fields header
+		for i := 0; i < int(numfields); i++ {
+			fieldName := readBlock(resp.Body)
+			fieldTable := readBlock(resp.Body)
+			fieldType, err := readInt32(resp.Body)
+			fieldIntflag, err := readInt32(resp.Body)
+			fieldLength, err := readInt32(resp.Body)
+		}
+	} else {
+
+	}
 
 	return
 }
