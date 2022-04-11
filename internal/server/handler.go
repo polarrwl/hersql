@@ -1,8 +1,12 @@
 package server
 
 import (
+	"errors"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -61,7 +65,7 @@ func (h *Handler) ComQuery(
 	h.logger.Infof("连接:[%s], id:[%d] query:[%s]", c.Conn.RemoteAddr().String(), c.ID, query)
 
 	switch query {
-	case "USE ``":
+	case "USE `UserDB`":
 		return callback(&sqltypes.Result{})
 	default:
 		params := url.Values{}
@@ -71,13 +75,17 @@ func (h *Handler) ComQuery(
 		params.Set("port", "")
 		params.Set("login", "")
 		params.Set("password", "")
-		params.Set("db", "")
+		params.Set("db", "UserDB")
 		resp, err := http.Post("http://navicat.test.com:809/", "application/x-www-form-urlencoded", strings.NewReader(params.Encode()))
 		if err != nil {
 			h.logger.Errorf("请求navicat api错误", err)
 			return err
 		} else {
-			return callback(parseNavicatResp(resp))
+			result, err := h.parseNavicatResp(resp)
+			if err != nil {
+				return err
+			}
+			return callback(result)
 		}
 	}
 }
@@ -86,56 +94,170 @@ func (h *Handler) WarningCount(c *mysql.Conn) uint16 {
 	return 0
 }
 
-func (h *Handler) parseNavicatResp(resp *http.Response) (result *sqltypes.Result) {
-	result = &sqltypes.Result{
-		Fields:       nil,
-		RowsAffected: 0,
-		InsertID:     0,
-		Info:         "",
-		Rows:         nil,
-		Extras:       nil,
-	}
+func (h *Handler) parseNavicatResp(resp *http.Response) (result *sqltypes.Result, err error) {
+	defer func() {
+		fmt.Println(err, result)
+	}()
+
+	body := resp.Body
 
 	// read header
-	buf := make([]byte, 6)
-	n, err := resp.Body.Read(buf)
+	header := make([]byte, 6)
+	n, err := body.Read(header)
 	if err != nil {
+		err = fmt.Errorf("read header error: [%w]", err)
 		return
 	}
 	if n != 6 {
+		err = errors.New(fmt.Sprintf("read header len:[%d] != 6", n))
 		return
 	}
 
-	errno, err := readInt32(resp.Body)
+	errno, err := readInt32(body)
+	if err != nil {
+		err = fmt.Errorf("read errno error: [%w]", err)
+		return
+	}
 
 	tmp := make([]byte, 6)
-	resp.Body.Read(tmp)
+	body.Read(tmp)
 
 	// read result header
-	errno, err = readInt32(resp.Body)
+	errno, err = readInt32(body)
 
-	affectrows, err := readInt32(resp.Body)
+	h.logger.Infof("errono: [%d]", errno)
 
-	insertid, err := readInt32(resp.Body)
+	affectrows, err := readInt32(body)
+	if err != nil {
+		err = fmt.Errorf("read affectrows error: [%w]", err)
+		return
+	}
 
-	numfields, err := readInt32(resp.Body)
+	insertid, err := readInt32(body)
+	if err != nil {
+		err = fmt.Errorf("read insertid error: [%w]", err)
+		return
+	}
 
-	numrows, err := readInt32(resp.Body)
+	numfields, err := readInt32(body)
+	if err != nil {
+		err = fmt.Errorf("read numfields error: [%w]", err)
+		return
+	}
+
+	numrows, err := readInt32(body)
+	if err != nil {
+		err = fmt.Errorf("read numrows error: [%w]", err)
+		return
+	}
 
 	tmp = make([]byte, 6)
-	resp.Body.Read(tmp)
+	body.Read(tmp)
+
+	fields := make([]*query.Field, 0)
 
 	if numfields > 0 {
 		// read fields header
 		for i := 0; i < int(numfields); i++ {
-			fieldName := readBlock(resp.Body)
-			fieldTable := readBlock(resp.Body)
-			fieldType, err := readInt32(resp.Body)
-			fieldIntflag, err := readInt32(resp.Body)
-			fieldLength, err := readInt32(resp.Body)
+			var fieldName []byte
+			fieldName, err = readBlock(body)
+			if err != nil {
+				return
+			}
+			var fieldTable []byte
+			fieldTable, err = readBlock(body)
+			var fieldType int32
+			fieldType, err = readInt32(body)
+			if err != nil {
+				err = fmt.Errorf("read fieldType error: [%w]", err)
+				return
+			}
+			if _, exists := query.Type_name[fieldType]; !exists {
+				err = errors.New(fmt.Sprintf("read invalid field type: [%d]", fieldType))
+				fmt.Println(err)
+				os.Exit(1)
+				return
+			}
+			var fieldIntflag int32
+			fieldIntflag, err = readInt32(body)
+			if err != nil {
+				err = fmt.Errorf("read fieldIntflag error: [%w]", err)
+				return
+			}
+			var fieldLength int32
+			fieldLength, err = readInt32(body)
+			if err != nil {
+				err = fmt.Errorf("read fieldLength error: [%w]", err)
+				return
+			}
+			fields = append(fields, &query.Field{
+				Name:         string(fieldName),
+				Table:        string(fieldTable),
+				ColumnLength: uint32(fieldLength),
+				Flags:        uint32(fieldIntflag),
+				Type:         query.Type(fieldType),
+			})
 		}
 	} else {
 
+	}
+
+	rows := make([][]sqltypes.Value, 0)
+
+	// read data
+	for i := 0; i < int(numrows); i++ {
+		row := make([]sqltypes.Value, 0)
+		for j := 0; j < int(numfields); j++ {
+			// 先读一个字节判断是否是null
+			b := readByte(body)
+			var len int32
+			var val []byte
+			if b == '\xFF' {
+				// 是null
+			} else {
+				if b == '\xFE' {
+					len, err = readInt32(body)
+					if err != nil {
+						err = fmt.Errorf("read row field len error: [%w]", err)
+						return
+					}
+				} else {
+					len = int32(b)
+				}
+
+				val := make([]byte, len)
+				n, err = body.Read(val)
+				if err != nil {
+					err = fmt.Errorf("read row field val error: [%w]", err)
+					return
+				}
+				if n != int(len) {
+					err = fmt.Errorf("read row field val len:[%d] != [%d]", n, len)
+					return
+				}
+			}
+			var sqlval sqltypes.Value
+			sqlval, err = sqltypes.NewValue(fields[j].Type, val)
+			if err != nil {
+				err = fmt.Errorf("sqltypes.NewValue error: [%w]", err)
+				allbody, _ := ioutil.ReadAll(resp.Body)
+				fmt.Println(allbody, fields[j].Type, val)
+				os.Exit(-1)
+				return
+			}
+			row = append(row, sqlval)
+		}
+
+		rows = append(rows, row)
+	}
+
+	result = &sqltypes.Result{
+		Fields:       fields,
+		RowsAffected: uint64(affectrows),
+		InsertID:     uint64(insertid),
+		Info:         "",
+		Rows:         rows,
+		Extras:       nil,
 	}
 
 	return
