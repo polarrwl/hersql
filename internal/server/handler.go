@@ -72,14 +72,15 @@ func (h *Handler) ComQuery(
 		params.Set("port", "")
 		params.Set("login", "")
 		params.Set("password", "")
-		params.Set("db", "UserDB")
+		params.Set("db", "")
 		resp, err := http.Post("http://navicat.test.com:809/", "application/x-www-form-urlencoded", strings.NewReader(params.Encode()))
 		if err != nil {
-			h.logger.Errorf("请求navicat api错误", err)
+			h.logger.Errorf("请求navicat api错误: [%s]", err.Error())
 			return err
 		} else {
-			result, err := navicat.NewReader(h.logger, resp.Body).Read()
+			result, err := navicat.NewReader(resp.Body).Read()
 			if err != nil {
+				h.logger.Errorf("navicat read err: [%s]", err.Error())
 				return err
 			}
 			return callback(result)
