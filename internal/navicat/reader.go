@@ -1,7 +1,6 @@
 package navicat
 
 import (
-	"errors"
 	"fmt"
 	"io"
 
@@ -19,18 +18,13 @@ func NewReader(body io.ReadCloser) *Reader {
 }
 
 func (r *Reader) Read() (result *sqltypes.Result, err error) {
-	defer func() {
-		fmt.Println(err, result)
-	}()
-
-	// read header
 	errno, err := r.readHeader()
 	if err != nil {
 		return
 	}
 
 	if errno > 0 {
-
+		fmt.Println("errno>0", errno)
 	} else {
 		var errno, affectrows, insertid, numfields, numrows uint32
 		errno, affectrows, insertid, numfields, numrows, err = r.readResultSetHeader()
@@ -93,7 +87,7 @@ func (r *Reader) readHeader() (errno uint32, err error) {
 		return
 	}
 	if n != 6 {
-		err = errors.New(fmt.Sprintf("Reader.readHeader read head buf n:%d != 6", n))
+		err = fmt.Errorf("Reader.readHeader read head buf n:%d != 6", n)
 		return
 	}
 
@@ -109,7 +103,7 @@ func (r *Reader) readHeader() (errno uint32, err error) {
 		return
 	}
 	if n != 6 {
-		err = errors.New(fmt.Sprintf("Reader.readHeader read tail buf n:%d != 6", n))
+		err = fmt.Errorf("Reader.readHeader read tail buf n:%d != 6", n)
 		return
 	}
 
@@ -154,7 +148,7 @@ func (r *Reader) readResultSetHeader() (errno, affectrows, insertid, numfields, 
 		return
 	}
 	if n != 12 {
-		err = errors.New(fmt.Sprintf("Reader.readResultSetHeader read buf n:%d != 12", n))
+		err = fmt.Errorf("Reader.readResultSetHeader read buf n:%d != 12", n)
 		return
 	}
 
@@ -174,6 +168,9 @@ func (r *Reader) readFieldsHeader(numfields uint32) (fields []*query.Field, err 
 
 		var fieldTable []byte
 		fieldTable, err = r.readBlockValue()
+		if err != nil {
+			return
+		}
 
 		var fieldType uint32
 		fieldType, err = r.readUint32()
@@ -260,7 +257,7 @@ func (r *Reader) readUint32() (value uint32, err error) {
 		return
 	}
 	if n != 4 {
-		err = errors.New(fmt.Sprint("Reader.readUint32 read n:%d != 4", n))
+		err = fmt.Errorf("Reader.readUint32 read n:[%d] != 4", n)
 		return
 	}
 
@@ -277,7 +274,7 @@ func (r *Reader) readBlockValue() (value []byte, err error) {
 		return
 	}
 	if n != 1 {
-		err = errors.New(fmt.Sprintf("Reader.readBlockValue read lenBys n:[%d] != 1", n))
+		err = fmt.Errorf("Reader.readBlockValue read lenBys n:[%d] != 1", n)
 		return
 	}
 
@@ -298,7 +295,7 @@ func (r *Reader) readBlockValue() (value []byte, err error) {
 		return
 	}
 	if n != int(len) {
-		err = errors.New(fmt.Sprintf("Reader.readBlockValue read value n:[%d] != [%d]", n, len))
+		err = fmt.Errorf("Reader.readBlockValue read value n:[%d] != [%d]", n, len)
 		return
 	}
 
@@ -323,7 +320,7 @@ func (r *Reader) readBlockValueWithFirstByte(b byte) (value []byte, err error) {
 		return
 	}
 	if n != int(len) {
-		err = errors.New(fmt.Sprintf("Reader.readBlockValue read value n:[%d] != [%d]", n, len))
+		err = fmt.Errorf("Reader.readBlockValue read value n:[%d] != [%d]", n, len)
 		return
 	}
 
