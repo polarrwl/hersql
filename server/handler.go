@@ -1,13 +1,10 @@
 package server
 
 import (
-	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/Orlion/lakeman/internal/navicat"
+	"github.com/Orlion/hersql/ntunnel"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -28,7 +25,7 @@ func newHandler(readTimeout time.Duration, logger *zap.SugaredLogger) *Handler {
 }
 
 func (h *Handler) NewConnection(c *mysql.Conn) {
-	h.logger.Infof("接收到来自新连接:[%s], id:[%d]", c.Conn.RemoteAddr().String(), c.ID)
+	h.logger.Infof("NewConnection:[%s], id:[%d]", c.Conn.RemoteAddr().String(), c.ID)
 }
 
 func (h *Handler) ComInitDB(c *mysql.Conn, schemaName string) error {
@@ -58,34 +55,23 @@ func (h *Handler) ComQuery(
 	c *mysql.Conn,
 	query string,
 	callback func(*sqltypes.Result) error,
-) error {
-	h.logger.Infof("连接:[%s], id:[%d] query:[%s]", c.Conn.RemoteAddr().String(), c.ID, query)
-
-	switch query {
-	case "USE `UserDB`":
-		return callback(&sqltypes.Result{})
-	default:
-		params := url.Values{}
-		params.Set("actn", "Q")
-		params.Set("q[]", query)
-		params.Set("host", "")
-		params.Set("port", "")
-		params.Set("login", "")
-		params.Set("password", "")
-		params.Set("db", "")
-		resp, err := http.Post("http://navicat.test.com:809/", "application/x-www-form-urlencoded", strings.NewReader(params.Encode()))
+) (err error) {
+	defer func() {
 		if err != nil {
-			h.logger.Errorf("请求navicat api错误: [%s]", err.Error())
-			return err
+			h.logger.Errorf("连接:[%s], id:[%d] query:[%s], err:[%s]", c.Conn.RemoteAddr().String(), c.ID, query, err.Error())
 		} else {
-			result, err := navicat.NewReader(resp.Body).Read()
-			if err != nil {
-				h.logger.Errorf("navicat read err: [%s]", err.Error())
-				return err
-			}
-			return callback(result)
+			h.logger.Infof("连接:[%s], id:[%d] query:[%s], success", c.Conn.RemoteAddr().String(), c.ID, query)
 		}
+	}()
+
+	result, err := ntunnel.Query(query)
+	if err != nil {
+		return
 	}
+
+	err = callback(result)
+
+	return
 }
 
 func (h *Handler) WarningCount(c *mysql.Conn) uint16 {

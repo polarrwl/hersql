@@ -1,2 +1,2 @@
-# lakeman
+# hersql
 mysql proxy server

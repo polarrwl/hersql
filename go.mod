@@ -1,4 +1,4 @@
-module github.com/Orlion/lakeman
+module github.com/Orlion/hersql
 
 go 1.15
 
