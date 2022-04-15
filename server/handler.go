@@ -15,6 +15,7 @@ type Handler struct {
 	mu          sync.Mutex
 	readTimeout time.Duration
 	logger      *zap.SugaredLogger
+	qer         ntunnel.Querier
 }
 
 func newHandler(readTimeout time.Duration, logger *zap.SugaredLogger) *Handler {
@@ -64,7 +65,7 @@ func (h *Handler) ComQuery(
 		}
 	}()
 
-	result, err := ntunnel.Query(query)
+	result, err := qer.Query(query)
 	if err != nil {
 		return
 	}

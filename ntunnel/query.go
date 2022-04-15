@@ -9,8 +9,18 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 )
 
+type Querier struct {
+	ntunnelUrl string
+}
+
+func NewQuerier(ntunnelUrl string) *Querier {
+	return &Querier{
+		ntunnelUrl: ntunnelUrl,
+	}
+}
+
 // TODO
-func Query(query string) (result *sqltypes.Result, err error) {
+func (qer *Querier) Query(query string) (result *sqltypes.Result, err error) {
 	switch query {
 	case "USE `UserDB`":
 		result = &sqltypes.Result{}
@@ -23,7 +33,7 @@ func Query(query string) (result *sqltypes.Result, err error) {
 		params.Set("login", "")
 		params.Set("password", "")
 		params.Set("db", "UserDB")
-		req, _ := http.NewRequest(http.MethodPost, "http://navicat.test.com:809/", strings.NewReader(params.Encode()))
+		req, _ := http.NewRequest(http.MethodPost, qer.ntunnelUrl, strings.NewReader(params.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("accept-encoding", "identity")
 		httpClient := &http.Client{
