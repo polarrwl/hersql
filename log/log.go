@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func GetLogger(conf *config.Conf) *zap.SugaredLogger {
+func GetLogger(conf *config.Log) *zap.SugaredLogger {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
@@ -23,7 +23,7 @@ func GetLogger(conf *config.Conf) *zap.SugaredLogger {
 	})
 
 	infoFileWriteSyncer := zapcore.AddSync(&lumberjack.Logger{
-		Filename:   conf.Log.InfoLogFilename,
+		Filename:   conf.InfoLogFilename,
 		MaxSize:    2,
 		MaxBackups: 100,
 		MaxAge:     30,
@@ -32,7 +32,7 @@ func GetLogger(conf *config.Conf) *zap.SugaredLogger {
 	infoFileCore := zapcore.NewCore(encoder, zapcore.NewMultiWriteSyncer(infoFileWriteSyncer, zapcore.AddSync(os.Stdout)), lowPriority)
 
 	errorFileWriteSyncer := zapcore.AddSync(&lumberjack.Logger{
-		Filename:   conf.Log.InfoLogFilename,
+		Filename:   conf.InfoLogFilename,
 		MaxSize:    1,
 		MaxBackups: 5,
 		MaxAge:     30,

@@ -8,9 +8,9 @@ import (
 )
 
 type Conf struct {
-	Server     Server `yaml:"server"`
-	Log        Log    `yaml:"log"`
-	NtunnelUrl string `yaml:"ntunnel_url"`
+	Server     *Server `yaml:"server"`
+	Log        *Log    `yaml:"log"`
+	NtunnelUrl string  `yaml:"ntunnel_url"`
 }
 
 type Server struct {

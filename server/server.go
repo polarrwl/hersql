@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/Orlion/hersql/config"
+	"github.com/Orlion/hersql/log"
 	"github.com/dolthub/vitess/go/mysql"
 	"go.uber.org/zap"
 )
@@ -12,10 +13,11 @@ type Server struct {
 	logger   *zap.SugaredLogger
 }
 
-func NewServer(conf *config.Conf, logger *zap.SugaredLogger) (*Server, error) {
-	handler := newHandler(conf.Server.ConnReadTimeout, logger)
+func NewServer(conf *config.Conf) (*Server, error) {
+	logger := log.GetLogger(conf.Log)
+	handler := newHandler(conf.Server.ConnReadTimeout, conf.NtunnelUrl, logger)
 
-	l, err := NewListener(conf.Server.Protocol, conf.Server.Address, handler)
+	l, err := newListener(conf.Server.Protocol, conf.Server.Address, handler)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +35,6 @@ func NewServer(conf *config.Conf, logger *zap.SugaredLogger) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if conf.Server.Version != "" {
 		vtListnr.ServerVersion = conf.Server.Version
 	}
@@ -44,7 +45,7 @@ func NewServer(conf *config.Conf, logger *zap.SugaredLogger) (*Server, error) {
 }
 
 func (s *Server) Start() error {
-	s.logger.Infow("server 启动...")
+	s.logger.Infow("server starting...")
 	s.Listener.Accept()
 	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/Orlion/hersql/config"
-	"github.com/Orlion/hersql/log"
 	"github.com/Orlion/hersql/server"
 )
 
@@ -24,7 +23,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	server, err := server.NewServer(conf, log.GetLogger(conf))
+	server, err := server.NewServer(conf)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(-1)

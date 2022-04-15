@@ -1,7 +1,6 @@
 package server
 
 import (
-	"sync"
 	"time"
 
 	"github.com/Orlion/hersql/ntunnel"
@@ -12,16 +11,17 @@ import (
 )
 
 type Handler struct {
-	mu          sync.Mutex
 	readTimeout time.Duration
 	logger      *zap.SugaredLogger
-	qer         ntunnel.Querier
+	qer         *ntunnel.Querier
 }
 
-func newHandler(readTimeout time.Duration, logger *zap.SugaredLogger) *Handler {
+func newHandler(readTimeout time.Duration, ntunnelUrl string, logger *zap.SugaredLogger) *Handler {
+	qer := ntunnel.NewQuerier(ntunnelUrl)
 	return &Handler{
 		readTimeout: readTimeout,
 		logger:      logger,
+		qer:         qer,
 	}
 }
 
@@ -48,7 +48,7 @@ func (h *Handler) ComResetConnection(c *mysql.Conn) {
 
 // ConnectionClosed reports that a connection has been closed.
 func (h *Handler) ConnectionClosed(c *mysql.Conn) {
-	h.logger.Infof("连接:[%s], id:[%d] 关闭", c.Conn.RemoteAddr().String(), c.ID)
+	h.logger.Infof("ConnectionClosed:[%s], id:[%d]", c.Conn.RemoteAddr().String(), c.ID)
 }
 
 // ComQuery executes a SQL query on the SQLe engine.
@@ -59,13 +59,13 @@ func (h *Handler) ComQuery(
 ) (err error) {
 	defer func() {
 		if err != nil {
-			h.logger.Errorf("连接:[%s], id:[%d] query:[%s], err:[%s]", c.Conn.RemoteAddr().String(), c.ID, query, err.Error())
+			h.logger.Errorf("Connection:[%s], id:[%d] query:[%s], err:[%s]", c.Conn.RemoteAddr().String(), c.ID, query, err.Error())
 		} else {
-			h.logger.Infof("连接:[%s], id:[%d] query:[%s], success", c.Conn.RemoteAddr().String(), c.ID, query)
+			h.logger.Infof("Connection:[%s], id:[%d] query:[%s], success", c.Conn.RemoteAddr().String(), c.ID, query)
 		}
 	}()
 
-	result, err := qer.Query(query)
+	result, err := h.qer.Query(query)
 	if err != nil {
 		return
 	}
