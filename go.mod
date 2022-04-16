@@ -3,7 +3,9 @@ module github.com/Orlion/hersql
 go 1.15
 
 require (
+	github.com/dolthub/go-mysql-server v0.11.0
 	github.com/dolthub/vitess v0.0.0-20211013185428-a8845fb919c1
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/kr/text v0.2.0 // indirect

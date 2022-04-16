@@ -1,14 +1,23 @@
 package server
 
 import (
+	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/Orlion/hersql/ntunnel"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
+	gomysql "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 )
+
+var useRe *regexp.Regexp
+
+func init() {
+	useRe = regexp.MustCompile("USE `(.+)`")
+}
 
 type Handler struct {
 	readTimeout time.Duration
@@ -59,18 +68,29 @@ func (h *Handler) ComQuery(
 ) (err error) {
 	defer func() {
 		if err != nil {
-			h.logger.Errorf("Connection:[%s], id:[%d] query:[%s], err:[%s]", c.Conn.RemoteAddr().String(), c.ID, query, err.Error())
+			h.logger.Errorf("connection:[%s], id:[%d] query:[%s], err:[%s]", c.Conn.RemoteAddr().String(), c.ID, query, err.Error())
 		} else {
-			h.logger.Infof("Connection:[%s], id:[%d] query:[%s], success", c.Conn.RemoteAddr().String(), c.ID, query)
+			h.logger.Infof("connection:[%s], id:[%d] query:[%s], success", c.Conn.RemoteAddr().String(), c.ID, query)
 		}
 	}()
 
-	result, err := h.qer.Query(query)
-	if err != nil {
-		return
-	}
+	if matches := useRe.FindStringSubmatch(query); len(matches) == 2 {
+		var cfg *gomysql.Config
+		cfg, err = gomysql.ParseDSN(matches[1])
+		if err != nil {
+			err = fmt.Errorf("query parse dsn:[%s] err:[%w]", matches[1], err)
+			return
+		}
+		fmt.Println(cfg)
+	} else {
+		var result *sqltypes.Result
+		result, err = h.qer.Query(query)
+		if err != nil {
+			return
+		}
 
-	err = callback(result)
+		err = callback(result)
+	}
 
 	return
 }

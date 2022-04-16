@@ -1,8 +1,11 @@
 package server
 
 import (
+	"time"
+
 	"github.com/Orlion/hersql/config"
 	"github.com/Orlion/hersql/log"
+	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/vitess/go/mysql"
 	"go.uber.org/zap"
 )
@@ -15,7 +18,7 @@ type Server struct {
 
 func NewServer(conf *config.Conf) (*Server, error) {
 	logger := log.GetLogger(conf.Log)
-	handler := newHandler(conf.Server.ConnReadTimeout, conf.NtunnelUrl, logger)
+	handler := newHandler(time.Duration(conf.Server.ConnReadTimeout)*time.Millisecond, conf.NtunnelUrl, logger)
 
 	l, err := newListener(conf.Server.Protocol, conf.Server.Address, handler)
 	if err != nil {
@@ -24,10 +27,10 @@ func NewServer(conf *config.Conf) (*Server, error) {
 
 	listenerCfg := mysql.ListenerConfig{
 		Listener:           l,
-		AuthServer:         nil,
+		AuthServer:         auth.NewNativeSingle(conf.Server.UserName, conf.Server.UserPassword, auth.AllPermissions).Mysql(),
 		Handler:            handler,
-		ConnReadTimeout:    conf.Server.ConnReadTimeout,
-		ConnWriteTimeout:   conf.Server.ConnWriteTimeout,
+		ConnReadTimeout:    time.Duration(conf.Server.ConnReadTimeout) * time.Millisecond,
+		ConnWriteTimeout:   time.Duration(conf.Server.ConnWriteTimeout) * time.Millisecond,
 		MaxConns:           conf.Server.MaxConnections,
 		ConnReadBufferSize: mysql.DefaultConnBufferSize,
 	}
@@ -45,7 +48,7 @@ func NewServer(conf *config.Conf) (*Server, error) {
 }
 
 func (s *Server) Start() error {
-	s.logger.Infow("server starting...")
+	s.logger.Infof("hersql starting server on [%s]", s.Listener.Addr())
 	s.Listener.Accept()
 	return nil
 }
