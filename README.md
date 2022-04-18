@@ -1,2 +1,2 @@
 # hersql
-mysql proxy server
+Forward mysql request to ntunnel_mysql.php
