@@ -1,7 +1,7 @@
 package server
 
 import (
-	"fmt"
+	"errors"
 	"regexp"
 	"time"
 
@@ -9,58 +9,58 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/proto/query"
-	gomysql "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
 )
 
-var useRe *regexp.Regexp
-
-func init() {
-	useRe = regexp.MustCompile("USE `(.+)`")
-}
+var useRe = regexp.MustCompile("^USE `(.+)`$")
+var dsnRe = regexp.MustCompile(`^<(.+)>$`)
 
 type Handler struct {
 	readTimeout time.Duration
 	logger      *zap.SugaredLogger
 	qer         *ntunnel.Querier
+	sm          *SessionManager
 }
 
-func newHandler(readTimeout time.Duration, ntunnelUrl string, logger *zap.SugaredLogger) *Handler {
+func NewHandler(readTimeout time.Duration, ntunnelUrl string, logger *zap.SugaredLogger, sm *SessionManager) *Handler {
 	qer := ntunnel.NewQuerier(ntunnelUrl)
 	return &Handler{
 		readTimeout: readTimeout,
 		logger:      logger,
 		qer:         qer,
+		sm:          sm,
 	}
 }
 
 func (h *Handler) NewConnection(c *mysql.Conn) {
 	h.logger.Infof("NewConnection:[%s], id:[%d]", c.Conn.RemoteAddr().String(), c.ID)
+	h.sm.NewSession(c)
 }
 
 func (h *Handler) ComInitDB(c *mysql.Conn, schemaName string) error {
-	h.logger.Infof("ComInitDB, [%s], id:[%d] schemaName:[%s]", c.Conn.RemoteAddr().String(), c.ID, schemaName)
+	h.logger.Infof("ComInitDB:[%s], id:[%d] schemaName:[%s]", c.Conn.RemoteAddr().String(), c.ID, schemaName)
 	return nil
 }
 
 func (h *Handler) ComPrepare(c *mysql.Conn, query string) ([]*query.Field, error) {
-	return nil, nil
+	h.logger.Infof("ComPrepare:[%s], id:[%d]", c.Conn.RemoteAddr().String(), c.ID)
+	return nil, errors.New("transactions are not supported")
 }
 
 func (h *Handler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
-	return nil
+	h.logger.Infof("ComStmtExecute:[%s], id:[%d]", c.Conn.RemoteAddr().String(), c.ID)
+	return errors.New("transactions are not supported")
 }
 
 func (h *Handler) ComResetConnection(c *mysql.Conn) {
-	// TODO: handle reset logic
+	h.logger.Infof("ComResetConnection:[%s], id:[%d]", c.Conn.RemoteAddr().String(), c.ID)
 }
 
-// ConnectionClosed reports that a connection has been closed.
 func (h *Handler) ConnectionClosed(c *mysql.Conn) {
 	h.logger.Infof("ConnectionClosed:[%s], id:[%d]", c.Conn.RemoteAddr().String(), c.ID)
+	h.sm.DeleteSession(c)
 }
 
-// ComQuery executes a SQL query on the SQLe engine.
 func (h *Handler) ComQuery(
 	c *mysql.Conn,
 	query string,
@@ -68,28 +68,35 @@ func (h *Handler) ComQuery(
 ) (err error) {
 	defer func() {
 		if err != nil {
-			h.logger.Errorf("connection:[%s], id:[%d] query:[%s], err:[%s]", c.Conn.RemoteAddr().String(), c.ID, query, err.Error())
+			h.logger.Errorf("ComQuery:[%s], connection:[%s], id:[%d] err:[%s]", query, c.Conn.RemoteAddr().String(), c.ID, err.Error())
 		} else {
-			h.logger.Infof("connection:[%s], id:[%d] query:[%s], success", c.Conn.RemoteAddr().String(), c.ID, query)
+			h.logger.Infof("ComQuery:[%s], connection:[%s], id:[%d] success", query, c.Conn.RemoteAddr().String(), c.ID)
 		}
 	}()
 
-	if matches := useRe.FindStringSubmatch(query); len(matches) == 2 {
-		var cfg *gomysql.Config
-		cfg, err = gomysql.ParseDSN(matches[1])
-		if err != nil {
-			err = fmt.Errorf("query parse dsn:[%s] err:[%w]", matches[1], err)
-			return
+	if useMatches := useRe.FindStringSubmatch(query); len(useMatches) == 2 {
+		if dsnMatches := dsnRe.FindStringSubmatch(useMatches[1]); len(dsnMatches) == 2 {
+			err = h.sm.GetSession(c).SetDSN(dsnMatches[1])
+			if err != nil {
+				return
+			}
+		} else {
+			h.sm.GetSession(c).GetDSN().SetDB(useMatches[1])
 		}
-		fmt.Println(cfg)
+		callback(new(sqltypes.Result))
 	} else {
-		var result *sqltypes.Result
-		result, err = h.qer.Query(query)
-		if err != nil {
-			return
-		}
+		dsn := h.sm.GetSession(c).GetDSN()
+		if dsn != nil {
+			var result *sqltypes.Result
+			result, err = h.qer.Query(query, h.sm.GetSession(c).GetDSN())
+			if err != nil {
+				return
+			}
 
-		err = callback(result)
+			err = callback(result)
+		} else {
+			h.logger.Warnf("ComQuery:[%s], connection:[%s], id:[%d] no dsn specified", query, c.Conn.RemoteAddr().String(), c.ID)
+		}
 	}
 
 	return

@@ -3,11 +3,11 @@ server:
   protocol: tcp
   address: 127.0.0.1:63306
   version: 5.7.1
-  conn_read_timeout: 5000 # milliseconds
+  conn_read_timeout: 300000 # milliseconds
   conn_write_timeout: 5000 # milliseconds
   max_connections: 10
-  user_name: hersql_user_name
-  user_password: hersql_user_pass
+  user_name: root
+  user_password: 123456
 log:
   info_log_filename: storage/log/info.log
   error_log_filename: storage/log/error.log

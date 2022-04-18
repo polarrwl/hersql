@@ -9,7 +9,7 @@ type Listener struct {
 	h *Handler
 }
 
-func newListener(protocol, address string, handler *Handler) (*Listener, error) {
+func NewListener(protocol, address string, handler *Handler) (*Listener, error) {
 	l, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err

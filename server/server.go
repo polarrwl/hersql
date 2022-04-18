@@ -18,9 +18,9 @@ type Server struct {
 
 func NewServer(conf *config.Conf) (*Server, error) {
 	logger := log.GetLogger(conf.Log)
-	handler := newHandler(time.Duration(conf.Server.ConnReadTimeout)*time.Millisecond, conf.NtunnelUrl, logger)
+	handler := NewHandler(time.Duration(conf.Server.ConnReadTimeout)*time.Millisecond, conf.NtunnelUrl, logger, NewSessionManager())
 
-	l, err := newListener(conf.Server.Protocol, conf.Server.Address, handler)
+	l, err := NewListener(conf.Server.Protocol, conf.Server.Address, handler)
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +54,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Close() error {
+	s.logger.Infof("hersql server close")
 	s.Listener.Close()
 	return nil
 }
