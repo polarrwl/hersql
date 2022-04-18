@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"time"
 
@@ -81,22 +82,29 @@ func (h *Handler) ComQuery(
 				return
 			}
 		} else {
-			h.sm.GetSession(c).GetDSN().SetDB(useMatches[1])
+			dsn := h.sm.GetSession(c).GetDSN()
+			if dsn == nil {
+				err = fmt.Errorf("no dsn specified before the query:[%s], you can try restarting the mysql client", query)
+				return
+			}
+
+			dsn.SetDB(useMatches[1])
 		}
 		callback(new(sqltypes.Result))
 	} else {
 		dsn := h.sm.GetSession(c).GetDSN()
-		if dsn != nil {
-			var result *sqltypes.Result
-			result, err = h.qer.Query(query, h.sm.GetSession(c).GetDSN())
-			if err != nil {
-				return
-			}
-
-			err = callback(result)
-		} else {
-			h.logger.Warnf("ComQuery:[%s], connection:[%s], id:[%d] no dsn specified", query, c.Conn.RemoteAddr().String(), c.ID)
+		if dsn == nil {
+			err = fmt.Errorf("no dsn specified before the query:[%s], you can try restarting the mysql client", query)
+			return
 		}
+
+		var result *sqltypes.Result
+		result, err = h.qer.Query(query, h.sm.GetSession(c).GetDSN())
+		if err != nil {
+			return
+		}
+
+		err = callback(result)
 	}
 
 	return
