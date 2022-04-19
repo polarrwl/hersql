@@ -24,8 +24,15 @@ func (r *Parser) Parse() (result *sqltypes.Result, err error) {
 	}
 
 	if errno > 0 {
-		//  TODO
-		fmt.Println("errno>0", errno)
+		var mysqlierr []byte
+		mysqlierr, err = r.parseBlockValue()
+		if err != nil {
+			return
+		}
+
+		result = &sqltypes.Result{
+			Info: string(mysqlierr),
+		}
 	} else {
 		var errno, affectrows, insertid, numfields, numrows uint32
 		errno, affectrows, insertid, numfields, numrows, err = r.parseResultSetHeader()
